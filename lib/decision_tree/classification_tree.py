@@ -69,6 +69,26 @@ class ClassificationDecisionTree:
         p = cls.__sample_prob(y, sample_weights)
         return 1 - np.max(p)
 
+    def split_node(self, X, y, sample_weight, feature, val):
+        left_child_mask = X[:, feature] <= val
+        right_child_mask = (~left_child_mask)
+
+        X_left, X_right = X[left_child_mask], X[right_child_mask]
+        y_left, y_right = y[left_child_mask], y[right_child_mask]
+        sample_weights_left, sample_weights_right = (
+            sample_weight[left_child_mask], sample_weight[right_child_mask]
+        )
+        weights_sum_left, weights_sum_right = (sum(sample_weights_left), sum(sample_weights_right))
+        sample_weights_left, sample_weights_right = (
+            sample_weights_left / weights_sum_left, sample_weights_right / weights_sum_right
+        )
+        return (
+            X_left, X_right,
+            y_left, y_right,
+            sample_weights_left, sample_weights_right,
+            weights_sum_left, weights_sum_right
+        )
+
     def build_tree(self, X: np.array, y: np.array, level: int = 0, sample_weight=None):
 
         n_sample, n_feature = X.shape
@@ -93,17 +113,13 @@ class ClassificationDecisionTree:
             min_node_impurity, split_val = current_node_impurity, None
 
             for val in set(X[:, feature]):
-                left_child_mask = X[:, feature] <= val
-                right_child_mask = (~left_child_mask)
 
-                y_left, y_right = y[left_child_mask], y[right_child_mask]
-                sample_weights_left, sample_weights_right = (
-                    sample_weight[left_child_mask], sample_weight[right_child_mask]
-                )
-                weights_sum_left, weights_sum_right = (sum(sample_weights_left), sum(sample_weights_right))
-                sample_weights_left, sample_weights_right = (
-                    sample_weights_left / weights_sum_left, sample_weights_right / weights_sum_right
-                )
+                (
+                    X_left, X_right,
+                    y_left, y_right,
+                    sample_weights_left, sample_weights_right,
+                    weights_sum_left, weights_sum_right
+                ) = self.split_node(X, y, sample_weight, feature, val)
 
                 node_impurity = (
                     weights_sum_left * self.impurity_func(y_left, sample_weights_left)
@@ -129,18 +145,12 @@ class ClassificationDecisionTree:
                 node_impurity=node_impurity,
             )
 
-        left_child_mask = X[:, split_feature] <= split_val
-        right_child_mask = (~left_child_mask)
-
-        y_left, y_right = y[left_child_mask], y[right_child_mask]
-        X_left, X_right = X[left_child_mask], X[right_child_mask]
-        sample_weights_left, sample_weights_right = (
-            sample_weight[left_child_mask], sample_weight[right_child_mask]
-        )
-        weights_sum_left, weights_sum_right = (sum(sample_weights_left), sum(sample_weights_right))
-        sample_weights_left, sample_weights_right = (
-            sample_weights_left / weights_sum_left, sample_weights_right / weights_sum_right
-        )
+        (
+            X_left, X_right,
+            y_left, y_right,
+            sample_weights_left, sample_weights_right,
+            weights_sum_left, weights_sum_right
+        ) = self.split_node(X, y, sample_weight, split_feature, split_val)
 
         node = Node(
             split_feature=split_feature,
