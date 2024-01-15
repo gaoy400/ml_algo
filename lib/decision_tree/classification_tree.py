@@ -92,16 +92,17 @@ class ClassificationDecisionTree:
     def build_tree(self, X: np.array, y: np.array, level: int = 0, sample_weight=None):
 
         n_sample, n_feature = X.shape
-        classification = mode(y)
         if sample_weight is None:
             sample_weight = np.ones((n_sample,)) / n_sample
+
+        y_count = np.bincount(y, weights=sample_weight)
         current_node_impurity = self.impurity_func(y, sample_weight)
         if (self.max_level is not None and level >= self.max_level) or len(np.unique(y)) <= 1:
             return Node(
                 split_feature=None,
                 split_value=None,
                 level=level,
-                classification=classification,
+                classification=np.argmax(y_count),
                 node_impurity=current_node_impurity,
             )
 
@@ -141,7 +142,7 @@ class ClassificationDecisionTree:
                 split_feature=None,
                 split_value=None,
                 level=level,
-                classification=classification,
+                classification=np.argmax(y_count),
                 node_impurity=node_impurity,
             )
 
@@ -156,7 +157,7 @@ class ClassificationDecisionTree:
             split_feature=split_feature,
             split_value=split_val,
             level=level,
-            classification=classification,
+            classification=np.argmax(y_count),
             node_impurity=node_impurity,
         )
 

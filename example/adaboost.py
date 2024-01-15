@@ -17,7 +17,7 @@ def preprocess(n_sample, n_feature, test_size):
 def main(in_sample=False):
     X_train, X_test, y_train, y_test = preprocess(3000, 10, 0.33)
 
-    adaboost = ClassificationAdaboost(max_tree_level=10, min_loss_update=1e-6)
+    adaboost = ClassificationAdaboost(max_tree_level=1, min_loss_update=1e-6)
 
     t0 = time.time()
     adaboost.fit(X_train.values, y_train.values, max_iter=100)
