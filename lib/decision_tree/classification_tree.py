@@ -29,9 +29,18 @@ class ClassificationDecisionTree:
     def __init__(
         self,
         max_level=None,
+        impurity_method="gini"
     ):
         self.max_level = max_level
         self.tree = None
+        if impurity_method == 'gini':
+            self.impurity_func = self.gini_index
+        elif impurity_method == 'entropy':
+            self.impurity_func = self.cross_entropy
+        elif impurity_method == 'misclassification':
+            self.impurity_func = self.misclassification
+        else:
+            raise NotImplementedError(f'Impurity method {impurity_method} is not implemented.')
 
     @classmethod
     def __sample_prob(cls, y, sample_weights):
@@ -60,22 +69,13 @@ class ClassificationDecisionTree:
         p = cls.__sample_prob(y, sample_weights)
         return 1 - np.max(p)
 
-    def build_tree(self, X: np.array, y: np.array, impurity_method="gini", level: int = 0, sample_weights=None):
-
-        if impurity_method == 'gini':
-            impurity_func = self.gini_index
-        elif impurity_method == 'entropy':
-            impurity_func = self.cross_entropy
-        elif impurity_method == 'misclassification':
-            impurity_func = self.misclassification
-        else:
-            raise NotImplementedError(f'Impurity method {impurity_method} is not implemented.')
+    def build_tree(self, X: np.array, y: np.array, level: int = 0, sample_weight=None):
 
         n_sample, n_feature = X.shape
         classification = mode(y)
-        if sample_weights is None:
-            sample_weights = np.ones((n_sample, )) / n_sample
-        current_node_impurity = impurity_func(y, sample_weights)
+        if sample_weight is None:
+            sample_weight = np.ones((n_sample,)) / n_sample
+        current_node_impurity = self.impurity_func(y, sample_weight)
         if (self.max_level is not None and level >= self.max_level) or len(np.unique(y)) <= 1:
             return Node(
                 split_feature=None,
@@ -98,7 +98,7 @@ class ClassificationDecisionTree:
 
                 y_left, y_right = y[left_child_mask], y[right_child_mask]
                 sample_weights_left, sample_weights_right = (
-                    sample_weights[left_child_mask], sample_weights[right_child_mask]
+                    sample_weight[left_child_mask], sample_weight[right_child_mask]
                 )
                 weights_sum_left, weights_sum_right = (sum(sample_weights_left), sum(sample_weights_right))
                 sample_weights_left, sample_weights_right = (
@@ -106,8 +106,8 @@ class ClassificationDecisionTree:
                 )
 
                 node_impurity = (
-                    weights_sum_left * impurity_func(y_left, sample_weights_left)
-                    + weights_sum_right * impurity_func(y_right, sample_weights_right)
+                    weights_sum_left * self.impurity_func(y_left, sample_weights_left)
+                    + weights_sum_right * self.impurity_func(y_right, sample_weights_right)
                 )
 
                 if node_impurity < min_node_impurity:
@@ -134,6 +134,13 @@ class ClassificationDecisionTree:
 
         y_left, y_right = y[left_child_mask], y[right_child_mask]
         X_left, X_right = X[left_child_mask], X[right_child_mask]
+        sample_weights_left, sample_weights_right = (
+            sample_weight[left_child_mask], sample_weight[right_child_mask]
+        )
+        weights_sum_left, weights_sum_right = (sum(sample_weights_left), sum(sample_weights_right))
+        sample_weights_left, sample_weights_right = (
+            sample_weights_left / weights_sum_left, sample_weights_right / weights_sum_right
+        )
 
         node = Node(
             split_feature=split_feature,
@@ -143,31 +150,29 @@ class ClassificationDecisionTree:
             node_impurity=node_impurity,
         )
 
-        left_child = self.build_tree(
-            X_left, y_left,
-            impurity_method=impurity_method, level=level + 1
-        )
-        right_child = self.build_tree(
-            X_right, y_right,
-            impurity_method=impurity_method, level=level + 1
-        )
+        left_child = self.build_tree(X_left, y_left, level=level + 1, sample_weight=sample_weights_left)
+        right_child = self.build_tree(X_right, y_right, level=level + 1, sample_weight=sample_weights_right)
         node.children.append(left_child)
         node.children.append(right_child)
 
         return node
 
-    def fit(self, X: np.array, y: np.array, impurity_method="gini", sample_weights=None):
-        self.tree = self.build_tree(X, y, impurity_method, level=0, sample_weights=sample_weights)
+    def fit(self, X: np.array, y: np.array, sample_weight=None):
+        self.tree = self.build_tree(X, y, level=0, sample_weight=sample_weight)
 
-    def predict(self, x, node=None):
-        if node is None:
-            node = self.tree
+    def predict(self, X):
+        def _predict(x, node=None):
+            if node is None:
+                node = self.tree
 
-        if node.split_feature is None:
-            return node.classification
-        
-        if x[node.split_feature] <= node.split_value:
-            return self.predict(x, node=node.children[0])
-        
-        else:
-            return self.predict(x, node=node.children[1])
+            if node.split_feature is None:
+                return node.classification
+
+            if x[node.split_feature] <= node.split_value:
+                return _predict(x, node=node.children[0])
+
+            else:
+                return _predict(x, node=node.children[1])
+
+        y_predict = np.apply_along_axis(lambda x: _predict(x), 1, X)
+        return y_predict

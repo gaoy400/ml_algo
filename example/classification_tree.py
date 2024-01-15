@@ -24,7 +24,7 @@ def main():
     t1 = time.time()
     print(f'build tree costs {t1 - t0} seconds')
 
-    y_predict = np.apply_along_axis(lambda x: cdt.predict(x), 1, X_test.values)
+    y_predict = cdt.predict(X_test.values)
 
     diff = pd.Series(y_predict - y_test.values, index=y_test.index)
     accuracy = (diff == 0).sum() / len(y_test)
